@@ -31,5 +31,21 @@ const API_BASE = "https://noias-backend.onrender.com/api";
 ## Notas
 
 - As imagens dos memes são guardadas como `dataURL` (base64) diretamente na coluna `imagem_data` — simples para já, mas cresce a base de dados rápido. Se o volume de publicações aumentar muito, o próximo passo é mover as imagens para um object storage (Cloudflare R2, S3, etc.) e guardar só o URL.
-- As rotas `/api/admin/*` não têm autenticação nenhuma ainda — qualquer pessoa com o URL pode banir/restaurar memes. Antes de divulgar o app, isso precisa de proteção (ex: uma chave simples em header, no mesmo estilo do servidor de licenças MEDBI).
+- As rotas `/api/admin/*` estão protegidas por uma chave simples (`ADMIN_KEY`) — ver secção abaixo.
 - `likes` e `reports` usam `device_id` (gerado no telemóvel) para evitar likes/denúncias duplicadas do mesmo aparelho — não é autenticação real, só uma trava simples.
+
+## Proteger as rotas de admin
+
+1. No Render, vai ao teu Web Service → **Environment** → **Add Environment Variable**:
+   - Key: `ADMIN_KEY`
+   - Value: uma password forte à tua escolha (ex: gera uma em https://1password.com/password-generator/)
+2. Guarda — o Render vai reiniciar o serviço sozinho.
+3. Para usar as rotas de admin (ex: ver denúncias, banir um meme), tens de enviar essa chave no header `x-admin-key` de cada pedido. Exemplo com `curl`:
+
+```
+curl https://noias.onrender.com/api/admin/reported \
+  -H "x-admin-key: A_TUA_CHAVE_AQUI"
+```
+
+Sem `ADMIN_KEY` definida no Render, essas rotas ficam automaticamente bloqueadas (falha fechada) — ou seja, mesmo que te esqueças de configurar, ninguém consegue usá-las sem chave.
+

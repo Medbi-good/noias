@@ -21,6 +21,17 @@ app.use(express.json({ limit: '8mb' })); // imagens dos memes vêm como dataURL 
 
 const CATEGORIAS_VALIDAS = ['Política', 'Futebol', 'Escola', 'Dia-a-dia', 'Relacionamentos', 'Trabalho', 'Outros'];
 
+// Trava simples para as rotas /api/admin — define ADMIN_KEY nas
+// Environment Variables do Render. Sem essa variável definida, as
+// rotas admin ficam bloqueadas por segurança (falha fechada).
+function requireAdminKey(req, res, next) {
+  const expected = process.env.ADMIN_KEY;
+  if (!expected) return res.status(503).json({ error: 'ADMIN_KEY não configurada no servidor' });
+  const given = req.get('x-admin-key');
+  if (given !== expected) return res.status(401).json({ error: 'Não autorizado' });
+  next();
+}
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // ---------- LISTAR FEED ----------
@@ -162,9 +173,9 @@ app.post('/api/memes/:id/report', async (req, res) => {
   }
 });
 
-// ---------- ADMIN (sem autenticação por agora — TODO: proteger antes de divulgar) ----------
+// ---------- ADMIN (protegido por chave — ver requireAdminKey acima) ----------
 // Lista memes escondidos/denunciados para revisão manual.
-app.get('/api/admin/reported', async (req, res) => {
+app.get('/api/admin/reported', requireAdminKey, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, autor, categoria, imagem_data, denuncias_count, visivel, criado_em
@@ -178,7 +189,7 @@ app.get('/api/admin/reported', async (req, res) => {
 });
 
 // POST /api/admin/memes/:id/ban  — remove definitivamente do feed
-app.post('/api/admin/memes/:id/ban', async (req, res) => {
+app.post('/api/admin/memes/:id/ban', requireAdminKey, async (req, res) => {
   try {
     await pool.query('UPDATE memes SET banido = TRUE, visivel = FALSE WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
@@ -189,7 +200,7 @@ app.post('/api/admin/memes/:id/ban', async (req, res) => {
 });
 
 // POST /api/admin/memes/:id/restore — repõe no feed (falso positivo de denúncia)
-app.post('/api/admin/memes/:id/restore', async (req, res) => {
+app.post('/api/admin/memes/:id/restore', requireAdminKey, async (req, res) => {
   try {
     await pool.query('UPDATE memes SET visivel = TRUE, denuncias_count = 0 WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
